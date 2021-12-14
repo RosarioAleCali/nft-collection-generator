@@ -25,7 +25,7 @@ def timer(fn):
 def open_config_file():
   filename = input("Enter the config filename: ")
 
-  if (not filename.endswith(".json")):
+  if not filename.endswith(".json"):
     print("Error: Config file must be a .json file!")
     sys.exit(1)
 
@@ -98,7 +98,7 @@ def validate_layer(layer):
 
 @timer
 def validate_config_obj(config_obj):
-  if (not bool(config_obj)):
+  if not bool(config_obj):
     print("Error: Config object is empty!")
     sys.exit(4)
 
