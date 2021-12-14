@@ -64,10 +64,10 @@ def validate_layer(layer):
     print("Error: Property \"trait_path\" is missing in layer \"" + name + "\"!")
     sys.exit(10)
 
-  if "filename" in layer:
-    filename = layer["filename"]
+  if "filenames" in layer:
+    filenames = layer["filenames"]
   else:
-    print("Error: Property \"filename\" is missing in layer \"" + name + "\"!")
+    print("Error: Property \"filenames\" is missing in layer \"" + name + "\"!")
     sys.exit(11)
 
   if "weights" in layer:
@@ -82,17 +82,17 @@ def validate_layer(layer):
     sys.exit(13)
 
   length = len(values)
-  if any(len(lst) != length for lst in [values, filename, weights]):
-    print("Error: Properties \"values\", \"filename\", and \"weights\" have different lengths in layer \"" + name + "\"!")
+  if any(len(lst) != length for lst in [values, filenames, weights]):
+    print("Error: Properties \"values\", \"filenames\", and \"weights\" have different lengths in layer \"" + name + "\"!")
     sys.exit(14)
 
   if sum(weights) != 100:
     print("Error: The sum of the weights in layer \"" + name + "\" is not equal to 100!")
     sys.exit(15)
 
-  for file in filename:
-    relative_file_path = os.path.relpath("../data/" + trait_path + file, current_path)
-    if not os.path.isfile(relative_file_path) or not (file.endswith(".png") or file.endswith(".jpg")):
+  for filename in filenames:
+    relative_file_path = os.path.relpath("../data/" + trait_path + filename, current_path)
+    if not os.path.isfile(relative_file_path) or not (filename.endswith(".png") or filename.endswith(".jpg")):
       print("Error: File \"" + relative_file_path + "\" does not exists or has wrong extension (only png and jpg are allowed)!")
       sys.exit(16)
 
@@ -127,7 +127,7 @@ def validate_config_obj(config_obj):
   # TODO: Ensure there are enough assets to generate the collection size
   images_per_layer = []
   for layer in layers:
-    images_per_layer.append(len(layer.filename))
+    images_per_layer.append(len(layer.filenames))
   if math.prod(images_per_layer) != size:
     print("Error: There are not enough assets to generate a collection of size " + size + "!")
     sys.exit(17)
@@ -191,7 +191,7 @@ def generate_images(layers, name):
 
     for layer in layers:
       trait_index = layer.values.index(image_to_create[layer.name])
-      filename = layer.filename[trait_index]
+      filename = layer.filenames[trait_index]
       file_path = os.path.relpath("../data/" + filename, current_path)
       image = cv2.imread(file_path)
       images.append(image)
