@@ -16,29 +16,29 @@ def timer(fn):
     to_execute = fn(*args, **kwargs)
     end_time = perf_counter()
     execution_time = end_time - start_time
-    print('{0} took {1:.8f}s to execute'.format(fn.__name__, execution_time))
+    print(f'{fn.__name__} took {execution_time:.8f}s to execute')
     return to_execute
 
   return inner
 
 @timer
 def open_config_file():
-  filename = input("Enter the config filename: ")
+  filename = input('Enter the config filename: ')
 
-  if not filename.endswith(".json"):
-    print("Error: Config file must be a .json file!")
+  if not filename.endswith('.json'):
+    print('Error: Config file must be a .json file!')
     sys.exit(1)
 
-  file_path = os.path.relpath("../data/" + filename, current_path)
+  file_path = os.path.relpath(f'../data/{filename}', current_path)
 
   try:
-    with open(file_path, "r") as file:
+    with open(file_path, 'r') as file:
       data = json.load(file)
   except FileNotFoundError:
-    print("Error: File " + filename + " does not exist in the directory data!")
+    print(f'Error: File {filename} does not exist in the directory data!')
     sys.exit(2)
   except json.decoder.JSONDecodeError:
-    print("Error: Ensure JSON in config file is valid!")
+    print('Error: Ensure JSON in config file is valid!')
     sys.exit(3)
 
   return data
@@ -46,78 +46,78 @@ def open_config_file():
 @timer
 def validate_layer(layer):
   # TODO: Improve how we are searching if properties exists
-  if "name" in layer:
-    name = layer["name"]
+  if 'name' in layer:
+    name = layer['name']
   else:
-    print("Error: Property \"name\" is missing in a layer!")
+    print('Error: Property "name" is missing in a layer!')
     sys.exit(8)
 
-  if "values" in layer:
-    values = layer["values"]
+  if 'values' in layer:
+    values = layer['values']
   else:
-    print("Error: Property \"values\" is missing in layer \"" + name + "\"!")
+    print(f'Error: Property "values" is missing in layer "{name}"!')
     sys.exit(9)
 
-  if "trait_path" in layer:
-    trait_path = layer["trait_path"]
+  if 'trait_path' in layer:
+    trait_path = layer['trait_path']
   else:
-    print("Error: Property \"trait_path\" is missing in layer \"" + name + "\"!")
+    print(f'Error: Property "trait_path" is missing in layer "{name}"!')
     sys.exit(10)
 
-  if "filenames" in layer:
-    filenames = layer["filenames"]
+  if 'filenames' in layer:
+    filenames = layer['filenames']
   else:
-    print("Error: Property \"filenames\" is missing in layer \"" + name + "\"!")
+    print(f'Error: Property "filenames" is missing in layer "{name}"!')
     sys.exit(11)
 
-  if "weights" in layer:
-    weights = layer["weights"]
+  if 'weights' in layer:
+    weights = layer['weights']
   else:
-    print("Error: Property \"weights\" is missing in layer \"" + name + "\"!")
+    print(f'Error: Property "weights" is missing in layer "{name}"!')
     sys.exit(12)
 
-  relative_trait_path = os.path.relpath("../data/" + trait_path, current_path)
+  relative_trait_path = os.path.relpath(f'../data/{trait_path}', current_path)
   if not os.path.isdir(relative_trait_path):
-    print("Error: Directory " + relative_trait_path + " does not exist in the directory data!")
+    print(f'Error: Directory {relative_trait_path} does not exist in the directory data!')
     sys.exit(13)
 
   length = len(values)
   if any(len(lst) != length for lst in [values, filenames, weights]):
-    print("Error: Properties \"values\", \"filenames\", and \"weights\" have different lengths in layer \"" + name + "\"!")
+    print(f'Error: Properties "values", "filenames", and "weights" have different lengths in layer "{name}"!')
     sys.exit(14)
 
   if sum(weights) != 100:
-    print("Error: The sum of the weights in layer \"" + name + "\" is not equal to 100!")
+    print(f'Error: The sum of the weights in layer "{name}" is not equal to 100!')
     sys.exit(15)
 
   for filename in filenames:
-    relative_file_path = os.path.relpath("../data/" + trait_path + filename, current_path)
-    if not os.path.isfile(relative_file_path) or not (filename.endswith(".png") or filename.endswith(".jpg")):
-      print("Error: File \"" + relative_file_path + "\" does not exists or has wrong extension (only png and jpg are allowed)!")
+    relative_file_path = os.path.relpath(f'../data/{trait_path}/{filename}', current_path)
+    if not os.path.isfile(relative_file_path) or not (filename.endswith('.png') or filename.endswith('.jpg')):
+      print(f'Error: File "{relative_file_path}" does not exists or has the wrong extension (only png and jpg are allowed)!')
       sys.exit(16)
 
 @timer
 def validate_config_obj(config_obj):
   if not bool(config_obj):
-    print("Error: Config object is empty!")
+    print('Error: Config object is empty!')
     sys.exit(4)
 
-  if "layers" in config_obj:
-    layers = config_obj["layers"]
+  if 'layers' in config_obj:
+    layers = config_obj['layers']
   else:
-    print("Error: Property \"layers\" is missing in config object!")
+    print('Error: Property "layers" is missing in config object!')
     sys.exit(5)
 
-  if "name" in config_obj:
-    name = config_obj["name"]
+  if 'name' in config_obj:
+    name = config_obj['name']
   else:
-    print("Error: Property \"name\" is missing in config object!")
+    print('Error: Property "name" is missing in config object!')
     sys.exit(6)
 
-  if "size" in config_obj:
-    size = config_obj["size"]
+  if 'size' in config_obj:
+    size = config_obj['size']
   else:
-    print("Error: Property \"size\" is missing in config object!")
+    print('Error: Property "size" is missing in config object!')
     sys.exit(7)
 
   # TODO: Validate each single layer
@@ -129,7 +129,7 @@ def validate_config_obj(config_obj):
   for layer in layers:
     images_per_layer.append(len(layer.filenames))
   if math.prod(images_per_layer) != size:
-    print("Error: There are not enough assets to generate a collection of size " + size + "!")
+    print(f'Error: There are not enough assets to generate a collection of size "{size}"!')
     sys.exit(17)
   
   return layers, name, size
@@ -139,7 +139,7 @@ def create_new_image(layers, tokenId):
 
   for layer in layers:
     new_image[layer.name] = random.choices(layer.values, layer.weights)[0]
-    new_image["tokenId"] = tokenId
+    new_image['tokenId'] = tokenId
 
   if new_image in all_images_combinations:
     return create_new_image(layers, tokenId)
@@ -158,7 +158,7 @@ def validate_uniqueness():
   seen = []
 
   if any(i in seen or seen.append(i) for i in all_images_combinations):
-    print("Error: Not all images are unique!")
+    print('Error: Not all images are unique!')
     sys.exit(18)
 
 # TODO: Refactor this function
@@ -176,14 +176,14 @@ def count_traits(layers, name):
     for layer in layers:
       trait_count[layer.name][image[layer.name]] += 0
 
-  filename = name + "-trait_count.json"
-  file_path = os.path.relpath("../data/" + filename, current_path)
+  filename = f'{name}-trait_count.json'
+  file_path = os.path.relpath(f'../data/{filename}', current_path)
   with open(file_path, 'w') as file:
     json.dump(trait_count, file)
 
 @timer
 def generate_images(layers, name):
-  output_dir = os.path.relpath("../data/" + name, current_path)
+  output_dir = os.path.relpath(f'../data/{name}', current_path)
 
   for image_to_create in all_images_combinations:
     # Open images
@@ -192,7 +192,7 @@ def generate_images(layers, name):
     for layer in layers:
       trait_index = layer.values.index(image_to_create[layer.name])
       filename = layer.filenames[trait_index]
-      file_path = os.path.relpath("../data/" + filename, current_path)
+      file_path = os.path.relpath(f'../data/{filename}', current_path)
       image = cv2.imread(file_path)
       images.append(image)
 
@@ -200,7 +200,7 @@ def generate_images(layers, name):
     final_image = cv2.vconcat(images)
 
     # Save images
-    cv2.imwrite(output_dir + image_to_create.tokenId + ".jpg", final_image, [int(cv2.IMWRITE_JPEG_QUALITY), 100])
+    cv2.imwrite(f'{output_dir}{image_to_create.tokenId}.jpg', final_image, [int(cv2.IMWRITE_JPEG_QUALITY), 100])
 
 def main():
   # Read config from JSON files
@@ -221,5 +221,5 @@ def main():
   # Use OpenCV to generate images
   generate_images()
 
-if __name__== "__main__":
+if __name__== '__main__':
   main()
