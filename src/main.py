@@ -127,7 +127,7 @@ def validate_config_obj(config_obj):
   # TODO: Ensure there are enough assets to generate the collection size
   images_per_layer = []
   for layer in layers:
-    images_per_layer.insert(len(layer.filename))
+    images_per_layer.append(len(layer.filename))
   if math.prod(images_per_layer) != size:
     print("Error: There are not enough assets to generate a collection of size " + size + "!")
     sys.exit(17)
@@ -151,11 +151,11 @@ def generate_images_combinations(layers, size):
   for i in range(size):
     new_image = create_new_image(layers, i)
 
-    all_images_combinations.insert(new_image)
+    all_images_combinations.append(new_image)
 
 @timer
 def validate_uniqueness():
-  seen = list()
+  seen = []
 
   if any(i in seen or seen.append(i) for i in all_images_combinations):
     print("Error: Not all images are unique!")
