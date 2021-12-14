@@ -4,11 +4,24 @@ import math
 import os
 import random
 import sys
+from time import perf_counter
 
 all_images_combinations = []
 
 current_path = os.path.dirname(__file__)
 
+def timer(fn):
+  def inner(*args, **kwargs):
+    start_time = perf_counter()
+    to_execute = fn(*args, **kwargs)
+    end_time = perf_counter()
+    execution_time = end_time - start_time
+    print('{0} took {1:.8f}s to execute'.format(fn.__name__, execution_time))
+    return to_execute
+
+  return inner
+
+@timer
 def open_config_file():
   filename = input("Enter the config filename: ")
 
@@ -30,6 +43,7 @@ def open_config_file():
 
   return data
 
+@timer
 def validate_layer(layer):
   # TODO: Improve how we are searching if properties exists
   if "name" in layer:
@@ -82,6 +96,7 @@ def validate_layer(layer):
       print("Error: File \"" + relative_file_path + "\" does not exists or has wrong extension (only png and jpg are allowed)!")
       sys.exit(16)
 
+@timer
 def validate_config_obj(config_obj):
   if (not bool(config_obj)):
     print("Error: Config object is empty!")
@@ -131,12 +146,14 @@ def create_new_image(layers, tokenId):
   else:
     return new_image
 
+@timer
 def generate_images_combinations(layers, size):
   for i in range(size):
     new_image = create_new_image(layers, i)
 
     all_images_combinations.insert(new_image)
 
+@timer
 def validate_uniqueness():
   seen = list()
 
@@ -145,6 +162,7 @@ def validate_uniqueness():
     sys.exit(18)
 
 # TODO: Refactor this function
+@timer
 def count_traits(layers, name):
   trait_count = {}
 
@@ -163,6 +181,7 @@ def count_traits(layers, name):
   with open(file_path, 'w') as file:
     json.dump(trait_count, file)
 
+@timer
 def generate_images(layers, name):
   output_dir = os.path.relpath("../data/" + name, current_path)
 
