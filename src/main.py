@@ -4,13 +4,64 @@ import os
 import shutil
 import random
 import sys
+import jsonschema
 from time import perf_counter
+from jsonschema import validate
+from jsonschema import Draft202012Validator
 from functools import reduce
 import operator
 
 all_images_combinations = []
 
 current_path = os.path.dirname(__file__)
+
+config_schema = {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+
+  "title": "Schema for the config object",
+  "description": "A configuration object for the NFT Collection Generator",
+  
+  "type": "object",
+  "properties": {
+    "layers": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/layer" }
+    },
+    "name": { "type": "string" },
+    "size": { "type": "number" }
+  },
+  
+  "required": ["layers", "name", "size"],
+  
+  "$defs": {
+    "layer": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "trait_path": { "type": "string" },
+        "filenames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "weights": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        }
+      },
+      "required": ["name", "values", "trait_path", "filenames","weights"]
+    }
+  }
+}
 
 def timer(fn):
   def inner(*args, **kwargs):
@@ -109,43 +160,54 @@ def validate_layer(layer):
 
 @timer
 def validate_config_obj(config_obj):
-  if not bool(config_obj):
-    print('Error: Config object is empty!')
-    sys.exit(4)
+  try:
+    validate(instance=config_obj, schema=config_schema)
+  except jsonschema.exceptions.ValidationError as err:
+    print(err)
+    sys.exit(20)
 
-  if 'layers' in config_obj:
-    layers = config_obj['layers']
-  else:
-    print('Error: Property "layers" is missing in config object!')
-    sys.exit(5)
+  layers = config_obj['layers']
+  name = config_obj['name']
+  size = config_obj['size']
 
-  if 'name' in config_obj:
-    name = config_obj['name']
-  else:
-    print('Error: Property "name" is missing in config object!')
-    sys.exit(6)
-
-  if 'size' in config_obj:
-    size = config_obj['size']
-  else:
-    print('Error: Property "size" is missing in config object!')
-    sys.exit(7)
-
-  # TODO: Validate each single layer
-  for layer in layers:
-    validate_layer(layer)
-
-  # TODO: Ensure there are enough assets to generate the collection size
-  images_per_layer = []
-  for layer in layers:
-    images_per_layer.append(len(layer['filenames']))
-  
-  calculated_size = reduce(operator.mul, images_per_layer)
-  if calculated_size != size:
-    print(f'Error: There are not enough assets to generate a collection of size "{size}"!')
-    sys.exit(17)
-  
   return layers, name, size
+  # if not bool(config_obj):
+  #   print('Error: Config object is empty!')
+  #   sys.exit(4)
+
+  # if 'layers' in config_obj:
+  #   layers = config_obj['layers']
+  # else:
+  #   print('Error: Property "layers" is missing in config object!')
+  #   sys.exit(5)
+
+  # if 'name' in config_obj:
+  #   name = config_obj['name']
+  # else:
+  #   print('Error: Property "name" is missing in config object!')
+  #   sys.exit(6)
+
+  # if 'size' in config_obj:
+  #   size = config_obj['size']
+  # else:
+  #   print('Error: Property "size" is missing in config object!')
+  #   sys.exit(7)
+
+  # # TODO: Validate each single layer
+  # for layer in layers:
+  #   validate_layer(layer)
+
+  # # TODO: Ensure there are enough assets to generate the collection size
+  # images_per_layer = []
+  # for layer in layers:
+  #   images_per_layer.append(len(layer['filenames']))
+  
+  # calculated_size = reduce(operator.mul, images_per_layer)
+  # if calculated_size != size:
+  #   print(f'Error: There are not enough assets to generate a collection of size "{size}"!')
+  #   sys.exit(17)
+  
+  # return layers, name, size
 
 def create_new_image(layers, tokenId):
   new_image = {}
@@ -234,6 +296,9 @@ def generate_images(layers, name):
     cv2.imwrite(f'{output_dir}/{image_to_create["tokenId"]}.jpg', final_image, [int(cv2.IMWRITE_JPEG_QUALITY), 100])
 
 def main():
+  # Validate our schema
+  Draft202012Validator.check_schema(config_schema)
+
   # Validate command line arguments
   command_line_arguments = validate_command_line_arguments(sys.argv)
   
