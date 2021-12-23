@@ -1,10 +1,12 @@
 import cv2
 import json
-import math
 import os
+import shutil
 import random
 import sys
 from time import perf_counter
+from functools import reduce
+import operator
 
 all_images_combinations = []
 
@@ -21,9 +23,18 @@ def timer(fn):
 
   return inner
 
-@timer
-def open_config_file():
-  filename = input('Enter the config filename: ')
+def validate_command_line_arguments(arguments):
+  arguments_length = len(arguments)
+
+  if arguments_length > 2:
+    print('Invalid arguments!')
+    print('Usage: main.py [path-to-config-file-in-data-directory]')
+    sys.exit(19)
+
+  return arguments
+
+def open_config_file(arguments):
+  filename = arguments[1] if len(arguments) == 2 else input('Enter the config filename: ')
 
   if not filename.endswith('.json'):
     print('Error: Config file must be a .json file!')
@@ -127,8 +138,10 @@ def validate_config_obj(config_obj):
   # TODO: Ensure there are enough assets to generate the collection size
   images_per_layer = []
   for layer in layers:
-    images_per_layer.append(len(layer.filenames))
-  if math.prod(images_per_layer) != size:
+    images_per_layer.append(len(layer['filenames']))
+  
+  calculated_size = reduce(operator.mul, images_per_layer)
+  if calculated_size != size:
     print(f'Error: There are not enough assets to generate a collection of size "{size}"!')
     sys.exit(17)
   
@@ -138,7 +151,7 @@ def create_new_image(layers, tokenId):
   new_image = {}
 
   for layer in layers:
-    new_image[layer.name] = random.choices(layer.values, layer.weights)[0]
+    new_image[layer['name']] = random.choices(layer['values'], layer['weights'])[0]
     new_image['tokenId'] = tokenId
 
   if new_image in all_images_combinations:
@@ -167,44 +180,65 @@ def count_traits(layers, name):
   trait_count = {}
 
   for layer in layers:
-    trait_count[layer.name] = {}
+    trait_count[layer['name']] = {}
 
-    for value in layer.values:
-      trait_count[layer.name][value] = 0
+    for value in layer['values']:
+      trait_count[layer['name']][value] = 0
 
   for image in all_images_combinations:
     for layer in layers:
-      trait_count[layer.name][image[layer.name]] += 0
+      trait_count[layer['name']][image[layer['name']]] += 1
 
   filename = f'{name}-trait_count.json'
   file_path = os.path.relpath(f'../data/{filename}', current_path)
   with open(file_path, 'w') as file:
-    json.dump(trait_count, file)
+    json.dump(trait_count, file, indent=4)
+
+def stack_images(images):
+  final_image = None
+
+  for previous, current in zip(images, images[1:]):
+    if previous is not None and current is not None:
+      first_image = final_image if final_image is not None else previous
+      second_image = current
+
+      final_image = first_image + second_image
+
+  return final_image
 
 @timer
 def generate_images(layers, name):
   output_dir = os.path.relpath(f'../data/{name}', current_path)
+
+  if os.path.exists(output_dir) and os.path.isdir(output_dir):
+    shutil.rmtree(output_dir)
+
+  os.mkdir(output_dir)
 
   for image_to_create in all_images_combinations:
     # Open images
     images = []
 
     for layer in layers:
-      trait_index = layer.values.index(image_to_create[layer.name])
-      filename = layer.filenames[trait_index]
-      file_path = os.path.relpath(f'../data/{filename}', current_path)
-      image = cv2.imread(file_path)
+      trait_index = layer['values'].index(image_to_create[layer['name']])
+      directory = layer['trait_path']
+      filename = layer['filenames'][trait_index]
+      file_path = os.path.relpath(f'../data/{directory}/{filename}', current_path)
+      image = cv2.imread(file_path, cv2.IMREAD_UNCHANGED)
       images.append(image)
 
     # Combine images
-    final_image = cv2.vconcat(images)
+    final_image = stack_images(images)
 
     # Save images
-    cv2.imwrite(f'{output_dir}{image_to_create.tokenId}.jpg', final_image, [int(cv2.IMWRITE_JPEG_QUALITY), 100])
+    cv2.imwrite(f'{output_dir}/{image_to_create["tokenId"]}.jpg', final_image, [int(cv2.IMWRITE_JPEG_QUALITY), 100])
 
 def main():
+  # Validate command line arguments
+  command_line_arguments = validate_command_line_arguments(sys.argv)
+  
   # Read config from JSON files
-  config_obj = open_config_file()
+  config_obj = open_config_file(command_line_arguments)
 
   # Validate config obj
   layers, name, size = validate_config_obj(config_obj)
@@ -219,7 +253,7 @@ def main():
   count_traits(layers, name)
 
   # Use OpenCV to generate images
-  generate_images()
+  generate_images(layers, name)
 
 if __name__== '__main__':
   main()
