@@ -2,14 +2,13 @@ import cv2
 import json
 import os
 import shutil
+import math
 import random
 import sys
 import jsonschema
 from time import perf_counter
 from jsonschema import validate
 from jsonschema import Draft202012Validator
-from functools import reduce
-import operator
 
 all_images_combinations = []
 
@@ -74,13 +73,22 @@ def timer(fn):
 
   return inner
 
+@timer
+def validate_schema():
+  try:
+    Draft202012Validator.check_schema(config_schema)
+  except jsonschema.SchemaError as err:
+    print(err)
+    print("Schema Error: check the 'config_schema'")
+    sys.exit(1)
+
 def validate_command_line_arguments(arguments):
   arguments_length = len(arguments)
 
   if arguments_length > 2:
     print('Invalid arguments!')
     print('Usage: main.py [path-to-config-file-in-data-directory]')
-    sys.exit(19)
+    sys.exit(2)
 
   return arguments
 
@@ -89,7 +97,7 @@ def open_config_file(arguments):
 
   if not filename.endswith('.json'):
     print('Error: Config file must be a .json file!')
-    sys.exit(1)
+    sys.exit(3)
 
   file_path = os.path.relpath(f'../data/{filename}', current_path)
 
@@ -98,65 +106,39 @@ def open_config_file(arguments):
       data = json.load(file)
   except FileNotFoundError:
     print(f'Error: File {filename} does not exist in the directory data!')
-    sys.exit(2)
+    sys.exit(4)
   except json.decoder.JSONDecodeError:
     print('Error: Ensure JSON in config file is valid!')
-    sys.exit(3)
+    sys.exit(5)
 
   return data
 
 @timer
 def validate_layer(layer):
-  # TODO: Improve how we are searching if properties exists
-  if 'name' in layer:
-    name = layer['name']
-  else:
-    print('Error: Property "name" is missing in a layer!')
-    sys.exit(8)
-
-  if 'values' in layer:
-    values = layer['values']
-  else:
-    print(f'Error: Property "values" is missing in layer "{name}"!')
-    sys.exit(9)
-
-  if 'trait_path' in layer:
-    trait_path = layer['trait_path']
-  else:
-    print(f'Error: Property "trait_path" is missing in layer "{name}"!')
-    sys.exit(10)
-
-  if 'filenames' in layer:
-    filenames = layer['filenames']
-  else:
-    print(f'Error: Property "filenames" is missing in layer "{name}"!')
-    sys.exit(11)
-
-  if 'weights' in layer:
-    weights = layer['weights']
-  else:
-    print(f'Error: Property "weights" is missing in layer "{name}"!')
-    sys.exit(12)
+  filenames = layer['filenames']
+  trait_path = layer['trait_path']
+  values = layer['values']
+  weights = layer['weights']
 
   relative_trait_path = os.path.relpath(f'../data/{trait_path}', current_path)
   if not os.path.isdir(relative_trait_path):
     print(f'Error: Directory {relative_trait_path} does not exist in the directory data!')
-    sys.exit(13)
+    sys.exit(7)
 
   length = len(values)
   if any(len(lst) != length for lst in [values, filenames, weights]):
     print(f'Error: Properties "values", "filenames", and "weights" have different lengths in layer "{name}"!')
-    sys.exit(14)
+    sys.exit(8)
 
   if sum(weights) != 100:
     print(f'Error: The sum of the weights in layer "{name}" is not equal to 100!')
-    sys.exit(15)
+    sys.exit(9)
 
   for filename in filenames:
     relative_file_path = os.path.relpath(f'../data/{trait_path}/{filename}', current_path)
     if not os.path.isfile(relative_file_path) or not (filename.endswith('.png') or filename.endswith('.jpg')):
       print(f'Error: File "{relative_file_path}" does not exists or has the wrong extension (only png and jpg are allowed)!')
-      sys.exit(16)
+      sys.exit(10)
 
 @timer
 def validate_config_obj(config_obj):
@@ -164,50 +146,25 @@ def validate_config_obj(config_obj):
     validate(instance=config_obj, schema=config_schema)
   except jsonschema.exceptions.ValidationError as err:
     print(err)
-    sys.exit(20)
+    print("Supplied JSON config file is invalid!")
+    sys.exit(6)
 
   layers = config_obj['layers']
   name = config_obj['name']
   size = config_obj['size']
 
+  for layer in layers:
+    validate_layer(layer)
+
+  images_per_layer = []
+  for layer in layers:
+    images_per_layer.append(len(layer['filenames']))
+
+  if math.prod(images_per_layer) != size:
+    print(f'Error: There are not enough assets to generate a collection of size "{size}"!')
+    sys.exit(11)
+
   return layers, name, size
-  # if not bool(config_obj):
-  #   print('Error: Config object is empty!')
-  #   sys.exit(4)
-
-  # if 'layers' in config_obj:
-  #   layers = config_obj['layers']
-  # else:
-  #   print('Error: Property "layers" is missing in config object!')
-  #   sys.exit(5)
-
-  # if 'name' in config_obj:
-  #   name = config_obj['name']
-  # else:
-  #   print('Error: Property "name" is missing in config object!')
-  #   sys.exit(6)
-
-  # if 'size' in config_obj:
-  #   size = config_obj['size']
-  # else:
-  #   print('Error: Property "size" is missing in config object!')
-  #   sys.exit(7)
-
-  # # TODO: Validate each single layer
-  # for layer in layers:
-  #   validate_layer(layer)
-
-  # # TODO: Ensure there are enough assets to generate the collection size
-  # images_per_layer = []
-  # for layer in layers:
-  #   images_per_layer.append(len(layer['filenames']))
-  
-  # calculated_size = reduce(operator.mul, images_per_layer)
-  # if calculated_size != size:
-  #   print(f'Error: There are not enough assets to generate a collection of size "{size}"!')
-  #   sys.exit(17)
-  
-  # return layers, name, size
 
 def create_new_image(layers, tokenId):
   new_image = {}
@@ -234,7 +191,7 @@ def validate_uniqueness():
 
   if any(i in seen or seen.append(i) for i in all_images_combinations):
     print('Error: Not all images are unique!')
-    sys.exit(18)
+    sys.exit(12)
 
 # TODO: Refactor this function
 @timer
@@ -297,7 +254,7 @@ def generate_images(layers, name):
 
 def main():
   # Validate our schema
-  Draft202012Validator.check_schema(config_schema)
+  validate_schema()
 
   # Validate command line arguments
   command_line_arguments = validate_command_line_arguments(sys.argv)
