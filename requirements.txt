@@ -1,0 +1,2 @@
+jsonschema==4.3.2
+opencv_python==4.5.4.60
