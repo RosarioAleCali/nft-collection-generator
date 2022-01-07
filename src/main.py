@@ -1,4 +1,3 @@
-import cv2
 import json
 import os
 import shutil
@@ -6,9 +5,10 @@ import math
 import random
 import sys
 import jsonschema
-from time import perf_counter
 from jsonschema import validate
 from jsonschema import Draft202012Validator
+from PIL import Image 
+from time import perf_counter
 
 all_images_combinations = []
 
@@ -221,7 +221,7 @@ def stack_images(images):
       first_image = final_image if final_image is not None else previous
       second_image = current
 
-      final_image = first_image + second_image
+      final_image = Image.alpha_composite(first_image, second_image)
 
   return final_image
 
@@ -243,14 +243,15 @@ def generate_images(layers, name):
       directory = layer['trait_path']
       filename = layer['filenames'][trait_index]
       file_path = os.path.relpath(f'../data/{directory}/{filename}', current_path)
-      image = cv2.imread(file_path, cv2.IMREAD_UNCHANGED)
+      image = Image.open(file_path).convert('RGBA')
       images.append(image)
 
     # Combine images
     final_image = stack_images(images)
 
     # Save images
-    cv2.imwrite(f'{output_dir}/{image_to_create["tokenId"]}.jpg', final_image, [int(cv2.IMWRITE_JPEG_QUALITY), 100])
+    rgb_image = final_image.convert('RGB')
+    rgb_image.save(f'{output_dir}/{image_to_create["tokenId"]}.png')
 
 def main():
   # Validate our schema
