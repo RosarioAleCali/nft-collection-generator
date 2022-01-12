@@ -22,15 +22,16 @@ config_schema = {
   
   "type": "object",
   "properties": {
+    "collection_name": { "type": "string" },
     "layers": {
       "type": "array",
       "items": { "$ref": "#/$defs/layer" }
     },
-    "name": { "type": "string" },
-    "size": { "type": "number" }
+    "size": { "type": "number" },
+    "token_name": { "type": "string" },
   },
   
-  "required": ["layers", "name", "size"],
+  "required": ["collection_name", "layers", "size", "token_name"],
   
   "$defs": {
     "layer": {
@@ -149,9 +150,10 @@ def validate_config_obj(config_obj):
     print("Supplied JSON config file is invalid!")
     sys.exit(6)
 
+  collection_name = config_obj['collection_name']
   layers = config_obj['layers']
-  name = config_obj['name']
   size = config_obj['size']
+  token_name = config_obj['token_name']
 
   for layer in layers:
     validate_layer(layer)
@@ -160,11 +162,11 @@ def validate_config_obj(config_obj):
   for layer in layers:
     images_per_layer.append(len(layer['filenames']))
 
-  if math.prod(images_per_layer) != size:
+  if math.prod(images_per_layer) < size:
     print(f'Error: There are not enough assets to generate a collection of size "{size}"!')
     sys.exit(11)
 
-  return layers, name, size
+  return collection_name, layers, size, token_name
 
 def create_new_image(layers, tokenId):
   new_image = {}
@@ -179,11 +181,18 @@ def create_new_image(layers, tokenId):
     return new_image
 
 @timer
-def generate_images_combinations(layers, size):
+def generate_images_combinations(layers, size, collection_name):
+  place_value = int(math.log10(size)) + 1
+
   for i in range(size):
-    new_image = create_new_image(layers, i)
+    new_image = create_new_image(layers, f'{(i + 1):0{place_value}}')
 
     all_images_combinations.append(new_image)
+
+  filename = f'{collection_name}-tokens_info.json'
+  file_path = os.path.relpath(f'../data/{filename}', current_path)
+  with open(file_path, 'w') as file:
+    json.dump(all_images_combinations, file, indent=2)
 
 @timer
 def validate_uniqueness():
@@ -195,7 +204,7 @@ def validate_uniqueness():
 
 # TODO: Refactor this function
 @timer
-def count_traits(layers, name):
+def count_traits(layers, collection_name):
   trait_count = {}
 
   for layer in layers:
@@ -208,10 +217,10 @@ def count_traits(layers, name):
     for layer in layers:
       trait_count[layer['name']][image[layer['name']]] += 1
 
-  filename = f'{name}-trait_count.json'
+  filename = f'{collection_name}-trait_count.json'
   file_path = os.path.relpath(f'../data/{filename}', current_path)
   with open(file_path, 'w') as file:
-    json.dump(trait_count, file, indent=4)
+    json.dump(trait_count, file, indent=2)
 
 def stack_images(images):
   final_image = None
@@ -226,8 +235,8 @@ def stack_images(images):
   return final_image
 
 @timer
-def generate_images(layers, name):
-  output_dir = os.path.relpath(f'../data/{name}', current_path)
+def generate_images(layers, collection_name, token_name):
+  output_dir = os.path.relpath(f'../data/{collection_name}', current_path)
 
   if os.path.exists(output_dir) and os.path.isdir(output_dir):
     shutil.rmtree(output_dir)
@@ -251,7 +260,8 @@ def generate_images(layers, name):
 
     # Save images
     rgb_image = final_image.convert('RGB')
-    rgb_image.save(f'{output_dir}/{image_to_create["tokenId"]}.png')
+    filename = f'{token_name}-{image_to_create["tokenId"]}'
+    rgb_image.save(f'{output_dir}/{filename}.png')
 
 def main():
   # Validate our schema
@@ -264,19 +274,19 @@ def main():
   config_obj = open_config_file(command_line_arguments)
 
   # Validate config obj
-  layers, name, size = validate_config_obj(config_obj)
+  collection_name, layers, size, token_name = validate_config_obj(config_obj)
 
   # Generate image combinations
-  generate_images_combinations(layers, size)
+  generate_images_combinations(layers, size, collection_name)
 
   # Validate uniqueness
   validate_uniqueness()
 
   # Trait counting
-  count_traits(layers, name)
+  count_traits(layers, collection_name)
 
-  # Use OpenCV to generate images
-  generate_images(layers, name)
+  # Generate images
+  generate_images(layers, collection_name, token_name)
 
 if __name__== '__main__':
   main()
