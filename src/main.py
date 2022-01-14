@@ -12,6 +12,8 @@ from time import perf_counter
 
 all_images_combinations = []
 
+pil_images = {}
+
 current_path = os.path.dirname(__file__)
 
 config_schema = {
@@ -34,7 +36,7 @@ config_schema = {
   "required": ["collection_name", "layers", "size", "token_name"],
   
   "$defs": {
-    "layer": {
+    "sub_dir": {
       "type": "object",
       "properties": {
         "name": { "type": "string" },
@@ -44,7 +46,40 @@ config_schema = {
             "type": "string"
           }
         },
-        "trait_path": { "type": "string" },
+        "sub_layer_path": { "type": "string" },
+        "filenames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "weights": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "overall_weight": {
+          "type": "number",
+      },
+      "required": ["name", "values", "sub_layer_path", "filenames", "weights", "overall_weight"]
+    }
+    "layer": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "has_sub_layers": { "type": "boolean" },
+        "sub_layers": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sub_dir" }
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "layer_path": { "type": "string" },
         "filenames": {
           "type": "array",
           "items": {
@@ -58,7 +93,7 @@ config_schema = {
           }
         }
       },
-      "required": ["name", "values", "trait_path", "filenames","weights"]
+      "required": ["name", "has_sub_layers", "layer_path"]
     }
   }
 }
@@ -114,14 +149,19 @@ def open_config_file(arguments):
 
   return data
 
-@timer
-def validate_layer(layer):
+def validate_layer_details(layer, is_sub_layer = False, parent_path = ''):
+  name = layer['name']
   filenames = layer['filenames']
-  trait_path = layer['trait_path']
+  layer_path = layer['layer_path']
   values = layer['values']
   weights = layer['weights']
 
-  relative_trait_path = os.path.relpath(f'../data/{trait_path}', current_path)
+  if is_sub_layer:
+    sub_layer_path = layer['sub_layer_path']
+  else:
+    layer_path = layer['layer_path']
+
+  relative_trait_path = os.path.relpath(f'../data/{layer_path}', current_path)
   if not os.path.isdir(relative_trait_path):
     print(f'Error: Directory {relative_trait_path} does not exist in the directory data!')
     sys.exit(7)
@@ -135,11 +175,36 @@ def validate_layer(layer):
     print(f'Error: The sum of the weights in layer "{name}" is not equal to 100!')
     sys.exit(9)
 
-  for filename in filenames:
-    relative_file_path = os.path.relpath(f'../data/{trait_path}/{filename}', current_path)
-    if not os.path.isfile(relative_file_path) or not (filename.endswith('.png') or filename.endswith('.jpg')):
-      print(f'Error: File "{relative_file_path}" does not exists or has the wrong extension (only png and jpg are allowed)!')
+  for i, filename in enumerate(filenames):
+    if is_sub_layer:
+      file_path = os.path.relpath(f'../data/{parent_path}/{layer_path}/{sub_layer_path}', current_path)
+    else:
+      file_path = os.path.relpath(f'../data/{layer_path}/{filename}', current_path)
+    
+    if os.path.isfile(file_path) and filename.endswith('.png'):
+      pil_images[values[i]] = Image.open(file_path).convert('RGBA')
+    else:
+      print(f'Error: File "{file_path}" does not exists or has the wrong extension (only png are allowed)!')
       sys.exit(10)
+
+@timer
+def validate_layer(layer):
+  name = layer['name']
+  has_sub_layers = layer['has_sub_layers']
+  layer_path = layer['layer_path']
+
+  if has_sub_layers:
+    sub_layers_weight = 0;
+
+    for sub_layer in layer.sub_layers:
+      sub_layers_weight += sub_layer.overall_weight
+      validate_layer_details(sub_layer, True, layer_path)
+
+    if sub_layers_weight != 100:
+      print(f'Error: The sum of the weights of the sub layers in layer "{name}" is not equal to 100!')
+      sys.exit(13)
+  else:
+    validate_layer_details(layer)
 
 @timer
 def validate_config_obj(config_obj):
@@ -172,8 +237,13 @@ def create_new_image(layers, tokenId):
   new_image = {}
 
   for layer in layers:
-    new_image[layer['name']] = random.choices(layer['values'], layer['weights'])[0]
-    new_image['tokenId'] = tokenId
+    if layer.has_sub_layers:
+      for sub_layer in layer.sub_layers:
+        new_image[layer['name']] = random.choices(layer['values'], (100 * (layer['overall_weight'] / layer['weights']))[0]
+        new_image['tokenId'] = tokenId
+    else:
+      new_image[layer['name']] = random.choices(layer['values'], layer['weights'])[0]
+      new_image['tokenId'] = tokenId
 
   if new_image in all_images_combinations:
     return create_new_image(layers, tokenId)
@@ -248,11 +318,7 @@ def generate_images(layers, collection_name, token_name):
     images = []
 
     for layer in layers:
-      trait_index = layer['values'].index(image_to_create[layer['name']])
-      directory = layer['trait_path']
-      filename = layer['filenames'][trait_index]
-      file_path = os.path.relpath(f'../data/{directory}/{filename}', current_path)
-      image = Image.open(file_path).convert('RGBA')
+      image = pil_images[image_to_create[layer['name']]]
       images.append(image)
 
     # Combine images
@@ -260,8 +326,7 @@ def generate_images(layers, collection_name, token_name):
 
     # Save images
     rgb_image = final_image.convert('RGB')
-    filename = f'{token_name}-{image_to_create["tokenId"]}'
-    rgb_image.save(f'{output_dir}/{filename}.png')
+    rgb_image.save(f'{output_dir}/{token_name}-{image_to_create["tokenId"]}.png')
 
 def main():
   # Validate our schema
