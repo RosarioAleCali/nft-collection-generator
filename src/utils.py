@@ -1,7 +1,10 @@
 import json
 import os
 import sys
+import shutil
 from time import perf_counter
+
+current_path = os.path.dirname(__file__)
 
 def timer(fn):
   def inner(*args, **kwargs):
@@ -34,3 +37,15 @@ def open_config_file(arguments):
     sys.exit(5)
 
   return data
+
+def initialize_dirs(collection_name):
+  output_dir = os.path.relpath(f'../data/{collection_name}', current_path)
+
+  if os.path.exists(output_dir) and os.path.isdir(output_dir):
+    shutil.rmtree(output_dir)
+
+  os.mkdir(output_dir)
+
+def write_json(content, file_path):
+  with open(file_path, 'w') as file:
+    json.dump(content, file, indent=2)
