@@ -21,13 +21,9 @@ config_schema = {
     "artist": { "type": "string" },
     "collection_name": { "type": "string" },
     "creators": { "type": "string" },
-    "images": {
+    "layers": {
       "type": "array",
-      "items": { "$ref": "#/$defs/image" }
-    },
-    "layer_levels": {
-      "type": "array",
-      "items": { "type": "number" }
+      "items": { "$ref": "#/$defs/layer" }
     },
     "only_one_of_traits": {
       "type": "array",
@@ -42,31 +38,44 @@ config_schema = {
     "trait_categories": {
       "type": "array",
       "items": { "type": "string" }
-    },
+    }
   },
   
   "required": [
     "artist",
     "collection_name",
     "creators",
-    "images",
+    "layers",
+    "only_one_of_traits",
+    "only_one_of_traits_weights",
     "size",
     "token_name",
-    "only_one_of_traits",
-    "only_one_of_traits_weights"
+    "trait_categories"
   ],
   
   "$defs": {
-    "image": {
+    "layer": {
       "type": "object",
       "properties": {
-        "file_path": { "type": "string" },
-        "layer_level": { "type": "number" },
-        "trait_category": { "type": "string" },
-        "trait_value": { "type": "string" },
-        "weight": { "type": "number" },
+        "layer_name": { "type": "string" },
+        "file_paths": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "trait_categories": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "trait_values": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "trait_weights": {
+          "type": "array",
+          "items": { "type": "number" }
+        },
       },
-      "required": ["file_path", "layer_level", "trait_category", "trait_value", "weight"]
+      "required": ["layer_name", "file_paths", "trait_categories", "trait_values", "trait_weights"]
     }
   }
 }
@@ -88,52 +97,49 @@ def validate_command_line_arguments():
 
   return sys.argv
 
-def validate_image_object(image, PIL_images):
-  file_path = os.path.relpath(f'../data/{image["file_path"]}', current_path)
+def validate_layer_object(layer, PIL_images):
+  sum_of_weights = int(sum(layer['trait_weights']))
 
-  if os.path.isfile(file_path) and image["file_path"].endswith('.png'):
-    PIL_images[image["trait_value"]] = open_image(file_path)
-  else:
-    print(f'Error: File "{file_path}" does not exists or has the wrong extension (only .png is allowed)!')
-    sys.exit(10)
+  length = len(layer['file_paths'])
+  if any(len(lst) != length for lst in [layer['file_paths'], layer['trait_categories'], layer['trait_values'], layer['trait_weights']]):
+    print(f'Error: Some properties in layer {layer["layer_name"]} have different lengths.')
+    print(f'file_paths: {len(layer["file_paths"])}')
+    print(f'trait_categories: {len(layer["trait_categories"])}')
+    print(f'trait_values: {len(layer["trait_values"])}')
+    print(f'trait_weights: {len(layer["trait_weights"])}')
+    sys.exit(8)
+
+  if sum_of_weights != 100:
+      print(f'Error: The sum of the weights in layer {layer["layer_name"]} is not equal to 100!')
+      print(f'The sum is {sum_of_weights}')
+      sys.exit(9)
+
+  for file_path, trait_value in zip(layer['file_paths'], layer['trait_values']):
+    path = os.path.relpath(f'../data/{file_path}', current_path)
+  
+    if os.path.isfile(path) and file_path.endswith('.png'):
+      PIL_images[trait_value] = open_image(path)
+    else:
+      print(f'Error: File "{file_path}" does not exists or has the wrong extension (only .PNGs are allowed)!')
+      sys.exit(10)
 
 @utils.timer
 def validate_config_obj(config_obj, PIL_images):
   try:
     validate(instance=config_obj, schema=config_schema)
   except jsonschema.exceptions.ValidationError as err:
-    print(err)
+    print(err.message)
     print("Supplied JSON config file is invalid!")
     sys.exit(6)
 
-  artist = config_obj['artist']
-  collection_name = config_obj['collection_name']
-  creators = config_obj['creators']
-  images = config_obj['images']
-  layer_levels = config_obj['layer_levels']
-  size = config_obj['size']
-  only_one_of_traits = config_obj['only_one_of_traits']
-  only_one_of_traits_weights = config_obj['only_one_of_traits_weights']
-  token_name = config_obj['token_name']
-  trait_categories = config_obj['trait_categories']
+  layers = config_obj['layers']
+  images_per_layer = []
 
-  images_per_layer = dict.fromkeys(layer_levels, 0)
-  total_weights = dict.fromkeys(layer_levels, 0)
-
-  for image in images:
-    validate_image_object(image, PIL_images)
-
-    images_per_layer[image['layer_level']] += 1
-    total_weights[image['layer_level']] += image['weight']
-
-  for key, value in total_weights.items():
-    if int(value) != 100:
-      print(f'Error: The sum of the weights in layer "{key}" is not equal to 100!')
-      sys.exit(9) 
-
+  for layer in layers:
+    images_per_layer.append(len(layer['file_paths']))
+    validate_layer_object(layer, PIL_images)
+ 
   # TODO: verify this math is correct
-  if math.prod(images_per_layer.values()) < size:
-    print(f'Error: There are not enough assets to generate a collection of size "{size}"!')
+  if math.prod(images_per_layer) < config_obj['size']:
+    print(f'Error: There are not enough assets to generate a collection of size {config_obj["size"]}!')
     sys.exit(11)
-
-  return artist, creators, collection_name, images, layer_levels, only_one_of_traits, only_one_of_traits_weights, size, token_name, trait_categories

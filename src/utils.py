@@ -39,6 +39,9 @@ def open_config_file(arguments):
   return data
 
 def initialize_dirs(collection_name):
+  if collection_name == "":
+    pass
+  
   output_dir = os.path.relpath(f'../data/{collection_name}', current_path)
 
   if os.path.exists(output_dir) and os.path.isdir(output_dir):
