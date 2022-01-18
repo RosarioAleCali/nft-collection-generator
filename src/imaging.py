@@ -15,9 +15,24 @@ def open_image(file_path):
 def create_new_image(config_obj, tokenId):
   output_dir = os.path.relpath(f'../data/{config_obj["collection_name"]}', current_path)
 
-  new_image = {
-    "artist": config_obj['artist'],
-    "creators": config_obj['creators'],
+  place_value = int(math.log10(config_obj['size'])) + 1
+
+  new_image = {}
+
+  new_image_metadata = {
+    "name": f'{config_obj["token_name"]} #{(tokenId + 1):0{place_value}}',
+    "symbol": f'{config_obj["symbol"]} #{(tokenId + 1):0{place_value}}',
+    "description": f'{config_obj["description"]} Number {tokenId + 1}/{config_obj["size"]}.',
+    "image": f'{tokenId}.png',
+    "attributes": [],
+    "properties": {
+      "files": [
+        {
+          "uri": f'{tokenId}.png',
+          "type": "image/png"
+        }
+      ]
+    }
   }
 
   for layer in config_obj['layers']:
@@ -60,19 +75,20 @@ def create_new_image(config_obj, tokenId):
   else:
     for name, value in new_image.items():
       if value != "None" and name != "artist" and name != "creators":
+        new_image_metadata["attributes"].append(
+          {"trait_type": name, "value": value}
+        )
         trait_count[name][value] += 1
 
     new_image['TokenId'] = tokenId
 
-    file_path = os.path.relpath(f'{output_dir}/{config_obj["token_name"]}-{tokenId}.json', current_path)
-    utils.write_json(new_image, file_path)
+    file_path = os.path.relpath(f'{output_dir}/{tokenId}.json', current_path)
+    utils.write_json(new_image_metadata, file_path)
 
     return new_image
 
 @utils.timer
 def generate_images_combinations(config_obj):
-  place_value = int(math.log10(config_obj['size'])) + 1
-
   # Initialize treat counts to zero
   for trait_category in config_obj['trait_categories']:
     trait_count[trait_category] = {}
@@ -83,8 +99,7 @@ def generate_images_combinations(config_obj):
 
   # Generare image combintations for size
   for i in range(config_obj['size']):
-    tokenId = f'{(i + 1):0{place_value}}'
-    new_image = create_new_image(config_obj, tokenId)
+    new_image = create_new_image(config_obj, i)
     all_images_combinations.append(new_image)
 
   # Write tokens info to JSON
@@ -129,7 +144,7 @@ def generate_images(PIL_images, collection_name, token_name):
 
     # Save images
     rgb_image = final_image.convert('RGB')
-    rgb_image.save(f'{output_dir}/{token_name}-{image_to_create["TokenId"]}.png')
+    rgb_image.save(f'{output_dir}/{image_to_create["TokenId"]}.png')
 
 @utils.timer
 def validate_uniqueness():

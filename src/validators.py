@@ -18,9 +18,8 @@ config_schema = {
   
   "type": "object",
   "properties": {
-    "artist": { "type": "string" },
     "collection_name": { "type": "string" },
-    "creators": { "type": "string" },
+    "description": { "type": "string" },
     "layers": {
       "type": "array",
       "items": { "$ref": "#/$defs/layer" }
@@ -34,6 +33,7 @@ config_schema = {
       "items": { "type": "number" }
     },
     "size": { "type": "number" },
+    "symbol": { "type": "string" },
     "token_name": { "type": "string" },
     "trait_categories": {
       "type": "array",
@@ -42,13 +42,13 @@ config_schema = {
   },
   
   "required": [
-    "artist",
     "collection_name",
-    "creators",
+    "description",
     "layers",
     "only_one_of_traits",
     "only_one_of_traits_weights",
     "size",
+    "symbol",
     "token_name",
     "trait_categories"
   ],
